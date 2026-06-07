@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050810;
+  --foreground: #f1f5f9;
+  --accent-cyan: #22d3ee;
+  --accent-gold: #f59e0b;
+  --surface-glass: rgba(15, 23, 42, 0.6);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Grid background pattern */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Glow radial */
+.glow-cyan {
+  background: radial-gradient(ellipse at 50% 0%, rgba(34, 211, 238, 0.15) 0%, transparent 70%);
+}
+
+/* Glass card */
+.glass {
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Animated gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #22d3ee 0%, #a78bfa 50%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
