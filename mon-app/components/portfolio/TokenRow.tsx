@@ -5,6 +5,7 @@ import { useState } from 'react'
 import type { TokenWithPrice } from '@/types/portfolio'
 import { useFiat } from '@/providers/FiatProvider'
 import { formatFiat, formatPrice, formatTokenAmount } from '@/lib/portfolio/formatters'
+import { getLogoSources } from '@/lib/portfolio/tokenLogo'
 
 interface Props {
   token: TokenWithPrice
@@ -13,17 +14,29 @@ interface Props {
   dimmed?: boolean
 }
 
-function TokenIcon({ symbol, logo }: { symbol: string; logo?: string }) {
-  const [imgFailed, setImgFailed] = useState(false)
+/**
+ * Icône de token avec fallback multi-sources :
+ * 1. Logo du provider (Alchemy/Ankr)
+ * 2. Trust Wallet Assets CDN
+ * 3. Initiales du symbole
+ */
+function TokenIcon({ symbol, logo, chainId, address }: {
+  symbol: string
+  logo?: string
+  chainId: number
+  address: string
+}) {
+  const sources = getLogoSources(chainId, address, logo)
+  const [srcIndex, setSrcIndex] = useState(0)
   const initials = symbol.slice(0, 2).toUpperCase()
 
-  if (logo && !imgFailed) {
+  if (srcIndex < sources.length) {
     return (
       <img
-        src={logo}
+        src={sources[srcIndex]}
         alt={symbol}
         className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-white/10"
-        onError={() => setImgFailed(true)}
+        onError={() => setSrcIndex(i => i + 1)}
       />
     )
   }
@@ -53,7 +66,7 @@ export function TokenRow({ token, chainId, dimmed = false }: Props) {
       {/* Accent bar gauche au hover */}
       <span className="absolute inset-y-0 left-0 w-0.5 rounded-r bg-gradient-to-b from-cyan-400 to-indigo-500 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
 
-      <TokenIcon symbol={token.symbol} logo={token.logo} />
+      <TokenIcon symbol={token.symbol} logo={token.logo} chainId={chainId} address={token.address} />
 
       {/* Nom + symbole */}
       <div className="min-w-0 flex-1">
