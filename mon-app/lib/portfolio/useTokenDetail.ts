@@ -9,6 +9,7 @@ import { parseTransfers } from './parseTransfers'
 import { computeCostBasis } from './costBasis'
 import { enrichConversionsWithPnl } from './conversions'
 import type { TokenDetail, TokenWithPrice, Conversion } from '@/types/portfolio'
+import type { TransferEntry } from '@/app/api/history/route'
 import { useFiat } from '@/providers/FiatProvider'
 
 /**
@@ -27,10 +28,8 @@ async function fetchHistoricalPrices(
     )
     if (!res.ok) return {}
     const raw: Record<string, Record<string, { usd: number | null; eur: number | null }>> = await res.json()
-    // Extraire les prix du coinId pour chaque timestamp
     const result: Record<string, { usd: number | null; eur: number | null }> = {}
     for (const [ts, coinsAtTs] of Object.entries(raw)) {
-      // DefiLlama normalise les clés — chercher avec toLowerCase pour être sûr
       const prices = coinsAtTs[coinId] ?? coinsAtTs[coinId.toLowerCase()] ?? null
       result[ts] = prices ?? { usd: null, eur: null }
     }
@@ -55,15 +54,13 @@ export function useTokenDetail(chainId: number, tokenAddress: string) {
     queryFn: async (): Promise<TokenDetail | null> => {
       if (!address || !chain) return null
 
-      // Valeurs par défaut (token natif)
       let balance: bigint = 0n
       let decimals = 18
       let symbol = chainLabel?.symbol ?? 'ETH'
       let name = chainLabel?.name ?? chain.name
       let logo: string | undefined = undefined
 
-      // 1. Chercher les données du token dans le cache React Query (rempli par useTokenBalances)
-      //    Évite un appel réseau supplémentaire si l'utilisateur vient de la liste du portefeuille.
+      // 1. Chercher les données du token dans le cache React Query
       const cachedBalances = queryClient.getQueryData<TokenWithPrice[]>(
         ['tokenBalances', chainId, address, currency],
       )
@@ -78,7 +75,6 @@ export function useTokenDetail(chainId: number, tokenAddress: string) {
         name = cachedToken.name
         logo = cachedToken.logo
       } else if (isNative) {
-        // Fallback : balance native via route API (server-side, pas de CORS)
         try {
           const res = await fetch(`/api/native-balance?wallet=${address}&chainId=${chainId}`)
           if (res.ok) {
@@ -87,7 +83,6 @@ export function useTokenDetail(chainId: number, tokenAddress: string) {
           }
         } catch { /* solde reste à 0n */ }
       } else {
-        // Fallback : liste de tokens via route API pour récupérer symbol/name/decimals/balance
         try {
           const res = await fetch(`/api/token-balances?wallet=${address}&chainId=${chainId}`)
           if (res.ok) {
@@ -107,32 +102,53 @@ export function useTokenDetail(chainId: number, tokenAddress: string) {
       const balanceFormatted = parseFloat(formatUnits(balance, decimals))
       const coinId = toLlamaCoinId(chainId, isNative ? 'native' : tokenAddress)
 
-      // 2. Historique des transferts
+      // 2. Historique des transferts (scopé sur l'actif cible)
       const historyRes = await fetch(
         `/api/history?chainId=${chainId}&wallet=${address}${!isNative ? `&token=${tokenAddress}` : ''}`,
       )
-      const { incoming = [], outgoing = [] } = historyRes.ok ? await historyRes.json() : {}
+      const { incoming = [], outgoing = [] }: { incoming: TransferEntry[]; outgoing: TransferEntry[] } =
+        historyRes.ok ? await historyRes.json() : {}
 
-      // 3. Parse conversions
-      const rawConversions = parseTransfers(incoming, outgoing, address)
+      // 3. Contexte multi-actifs pour les hashes uniques (détection swap)
+      const uniqueHashes = [...new Set([
+        ...incoming.map(t => t.hash),
+        ...outgoing.map(t => t.hash),
+      ])]
 
-      // 4. Prix actuel
+      let txContext: Record<string, TransferEntry[]> = {}
+      if (uniqueHashes.length > 0) {
+        try {
+          const ctxRes = await fetch(
+            `/api/history/tx-context?chainId=${chainId}&wallet=${address}&hashes=${uniqueHashes.join(',')}`,
+          )
+          if (ctxRes.ok) txContext = await ctxRes.json()
+        } catch { /* contexte indisponible, parseTransfers sans swap detection */ }
+      }
+
+      // 4. Parse conversions avec contexte cross-actifs
+      const targetToken = {
+        address: isNative ? null : tokenAddress,
+        isNative,
+      }
+      const rawConversions = parseTransfers(incoming, outgoing, address, txContext, targetToken)
+
+      // 5. Prix actuel
       const priceRes = await fetch(`/api/prices?coins=${coinId}&vs_currency=${currency}`)
       const priceData = priceRes.ok ? await priceRes.json() : {}
       const coinData = priceData[coinId] ?? {}
       const currentPrice: number | null = coinData[currency as 'eur' | 'usd'] ?? null
       const priceChange24h: number | null = coinData[`${currency}_24h_change`] ?? null
 
-      // 5. Prix historiques pour les conversions
+      // 6. Prix historiques pour les conversions
       const uniqueTimestamps = [...new Set(
         rawConversions
           .filter(c => c.timestamp !== null)
-          .map(c => Math.floor(new Date(c.timestamp!).getTime() / 1000))
+          .map(c => Math.floor(new Date(c.timestamp!).getTime() / 1000)),
       )]
 
       const historicalPrices = await fetchHistoricalPrices(uniqueTimestamps, coinId)
 
-      // 6. Enrichissement des conversions avec le prix au moment T
+      // 7. Enrichissement des conversions avec le prix au moment T
       const enrichedConversions: Conversion[] = rawConversions.map(c => {
         if (c.timestamp === null) return { ...c, priceAtTime: currentPrice }
         const ts = String(Math.floor(new Date(c.timestamp).getTime() / 1000))
@@ -143,18 +159,25 @@ export function useTokenDetail(chainId: number, tokenAddress: string) {
         return { ...c, priceAtTime }
       })
 
-      // 7. Coût de revient
-      const costBasis = computeCostBasis(enrichedConversions)
+      // 8. Cost basis FIFO
+      const costBasis = computeCostBasis(enrichedConversions, balanceFormatted, currentPrice)
 
-      // 8. P&L par mouvement
+      // 9. PnL par mouvement (sell/swap_out uniquement)
       const conversions = enrichConversionsWithPnl(enrichedConversions, costBasis.averageCostBasis)
 
-      // 9. P&L global
+      // 10. PnL global = réalisé + non réalisé
       const currentValue = currentPrice !== null ? balanceFormatted * currentPrice : null
-      const totalInvested = costBasis.totalInvested
-      const pnl = currentValue !== null && totalInvested !== null ? currentValue - totalInvested : null
-      const pnlPercent = pnl !== null && totalInvested !== null && totalInvested > 0
-        ? (pnl / totalInvested) * 100
+      const unrealizedPnl = currentValue !== null && costBasis.totalInvested !== null
+        ? currentValue - costBasis.totalInvested
+        : null
+      const pnl = unrealizedPnl !== null
+        ? costBasis.realizedPnl + unrealizedPnl
+        : costBasis.realizedPnl > 0
+          ? costBasis.realizedPnl
+          : null
+      const totalInvestedAll = costBasis.totalInvested
+      const pnlPercent = pnl !== null && totalInvestedAll !== null && totalInvestedAll > 0
+        ? (pnl / totalInvestedAll) * 100
         : null
 
       const token: TokenWithPrice = {
@@ -173,7 +196,7 @@ export function useTokenDetail(chainId: number, tokenAddress: string) {
         valueEur: coinData.eur != null ? balanceFormatted * coinData.eur : null,
       }
 
-      return { token, costBasis, currentValue, pnl, pnlPercent, conversions }
+      return { token, costBasis, currentValue, pnl, pnlPercent, unrealizedPnl, conversions }
     },
   })
 }

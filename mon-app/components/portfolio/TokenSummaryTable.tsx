@@ -41,12 +41,13 @@ function StatCard({
 
 export function TokenSummaryTable({ detail }: Props) {
   const { currency } = useFiat()
-  const { token, costBasis, currentValue, pnl, pnlPercent } = detail
+  const { token, costBasis, currentValue, pnl, pnlPercent, unrealizedPnl } = detail
 
   const price = currency === 'eur' ? token.priceEur : token.priceUsd
   const value = currency === 'eur' ? token.valueEur : token.valueUsd
 
   const isProfit = pnl !== null ? pnl >= 0 : null
+  const realizedPnl = costBasis.realizedPnl
 
   return (
     <div className="space-y-3">
@@ -87,16 +88,16 @@ export function TokenSummaryTable({ detail }: Props) {
         highlight
       />
 
-      {/* Coût de revient + P&L côte à côte */}
+      {/* Coût de revient + P&L total côte à côte */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <StatCard
           icon="📊"
           label="Coût de revient moyen"
           value={costBasis.averageCostBasis !== null ? formatPrice(costBasis.averageCostBasis, currency) : 'N/A'}
-          sub={costBasis.totalInvested !== null ? `Total investi : ${formatFiat(costBasis.totalInvested, currency)}` : undefined}
+          sub={costBasis.totalInvested !== null ? `Stock restant : ${formatFiat(costBasis.totalInvested, currency)}` : undefined}
         />
 
-        {/* P&L — card colorée selon profit/perte */}
+        {/* P&L total — card colorée selon profit/perte */}
         <div className={`flex flex-col gap-1.5 rounded-xl px-4 py-4 ring-1 ${
           isProfit === null
             ? 'bg-white/[0.025] ring-white/10'
@@ -108,7 +109,7 @@ export function TokenSummaryTable({ detail }: Props) {
             <span className={`text-sm ${isProfit === null ? 'text-white/40' : isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
               {isProfit === null ? '📈' : isProfit ? '📈' : '📉'}
             </span>
-            <span className="text-xs font-medium uppercase tracking-widest text-white/40">Gain / Perte</span>
+            <span className="text-xs font-medium uppercase tracking-widest text-white/40">Gain / Perte total</span>
           </div>
           <p className={`text-lg font-bold tabular-nums leading-tight ${pnlColor(pnl)}`}>
             {pnl !== null ? `${pnl >= 0 ? '+' : ''}${formatFiat(pnl, currency)}` : 'N/A'}
@@ -119,10 +120,39 @@ export function TokenSummaryTable({ detail }: Props) {
         </div>
       </div>
 
+      {/* PnL réalisé + non réalisé */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5 rounded-xl bg-white/[0.025] px-4 py-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white/40">✅</span>
+            <span className="text-xs font-medium uppercase tracking-widest text-white/40">P&amp;L réalisé</span>
+          </div>
+          <p className={`text-lg font-bold tabular-nums leading-tight ${pnlColor(realizedPnl)}`}>
+            {realizedPnl !== 0
+              ? `${realizedPnl >= 0 ? '+' : ''}${formatFiat(realizedPnl, currency)}`
+              : <span className="text-white/30">—</span>}
+          </p>
+          <p className="text-xs text-white/25">Ventes &amp; échanges passés</p>
+        </div>
+
+        <div className="flex flex-col gap-1.5 rounded-xl bg-white/[0.025] px-4 py-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white/40">⏳</span>
+            <span className="text-xs font-medium uppercase tracking-widest text-white/40">P&amp;L non réalisé</span>
+          </div>
+          <p className={`text-lg font-bold tabular-nums leading-tight ${pnlColor(unrealizedPnl)}`}>
+            {unrealizedPnl !== null
+              ? `${unrealizedPnl >= 0 ? '+' : ''}${formatFiat(unrealizedPnl, currency)}`
+              : 'N/A'}
+          </p>
+          <p className="text-xs text-white/25">Valeur actuelle vs coût du stock</p>
+        </div>
+      </div>
+
       {/* Note légale */}
       <p className="rounded-lg bg-white/[0.015] px-4 py-3 text-xs leading-relaxed text-white/20">
         Les prix historiques sont récupérés depuis DefiLlama au timestamp de chaque transaction.
-        En cas d'absence de donnée, le prix actuel est utilisé en approximation.
+        En cas d&apos;absence de donnée, le prix actuel est utilisé en approximation.
         Les données sont reconstruites depuis la blockchain et peuvent être incomplètes pour les airdrops ou transferts sans contrepartie identifiable.
       </p>
     </div>

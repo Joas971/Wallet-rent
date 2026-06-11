@@ -18,6 +18,18 @@ const TYPE_CONFIG: Record<string, { label: string; pill: string; row: string; do
     row: 'border-l-rose-500/50',
     dot: 'bg-rose-400',
   },
+  swap_in: {
+    label: 'Échange',
+    pill: 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/30',
+    row: 'border-l-violet-500/50',
+    dot: 'bg-violet-400',
+  },
+  swap_out: {
+    label: 'Échange',
+    pill: 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/30',
+    row: 'border-l-violet-500/50',
+    dot: 'bg-violet-400',
+  },
   transfer_in: {
     label: 'Réception',
     pill: 'bg-cyan-500/15 text-cyan-400 ring-1 ring-cyan-500/30',
@@ -60,10 +72,11 @@ export function ConversionsTable({ conversions, symbol }: Props) {
   const displayed = expanded ? conversions : conversions.slice(0, 8)
 
   const totalPnl = conversions.reduce((acc, c) => acc + (c.pnl ?? 0), 0)
-  const buys  = conversions.filter(c => c.type === 'buy').length
-  const sells = conversions.filter(c => c.type === 'sell').length
-  const ins   = conversions.filter(c => c.type === 'transfer_in').length
-  const outs  = conversions.filter(c => c.type === 'transfer_out').length
+  const buys   = conversions.filter(c => c.type === 'buy').length
+  const sells  = conversions.filter(c => c.type === 'sell').length
+  const swaps  = conversions.filter(c => c.type === 'swap_in' || c.type === 'swap_out').length
+  const ins    = conversions.filter(c => c.type === 'transfer_in').length
+  const outs   = conversions.filter(c => c.type === 'transfer_out').length
 
   return (
     <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.015]">
@@ -106,6 +119,7 @@ export function ConversionsTable({ conversions, symbol }: Props) {
           <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] px-5 py-3">
             {buys  > 0 && <SummaryChip label="Achats"    value={String(buys)}  accent="text-emerald-400" />}
             {sells > 0 && <SummaryChip label="Ventes"    value={String(sells)} accent="text-rose-400" />}
+            {swaps > 0 && <SummaryChip label="Échanges"  value={String(swaps)} accent="text-violet-400" />}
             {ins   > 0 && <SummaryChip label="Reçus"     value={String(ins)}   accent="text-cyan-400" />}
             {outs  > 0 && <SummaryChip label="Envoyés"   value={String(outs)}  accent="text-amber-400" />}
             <div className="ml-auto flex flex-col items-end rounded-xl bg-white/[0.025] px-4 py-2.5">
@@ -165,6 +179,11 @@ export function ConversionsTable({ conversions, symbol }: Props) {
                       <td className="px-4 py-3 text-right font-medium text-white tabular-nums">
                         {amount !== null ? formatTokenAmount(amount) : 'N/A'}
                         <span className="ml-1 text-xs text-white/30">{symbol}</span>
+                        {(c.type === 'swap_out' || c.type === 'swap_in') && c.counterpartySymbol && c.counterpartyAmount !== null && (
+                          <span className="ml-1.5 text-xs text-violet-400/70">
+                            → {formatTokenAmount(c.counterpartyAmount)} {c.counterpartySymbol}
+                          </span>
+                        )}
                       </td>
 
                       {/* Valeur fiat */}

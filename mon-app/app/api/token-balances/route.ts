@@ -7,6 +7,11 @@ const ALCHEMY_NETWORK: Record<number, string> = {
   42161:  'arb-mainnet',
   10:     'opt-mainnet',
   8453:   'base-mainnet',
+  56:     'bnb-mainnet',
+  43114:  'avax-mainnet',
+  324:    'zksync-mainnet',
+  59144:  'linea-mainnet',
+  534352: 'scroll-mainnet',
 }
 
 // Chains supportées par Ankr multichain (fallback gratuit sans clé)
