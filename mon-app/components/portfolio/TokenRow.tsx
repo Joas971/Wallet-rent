@@ -9,6 +9,8 @@ import { formatFiat, formatPrice, formatTokenAmount } from '@/lib/portfolio/form
 interface Props {
   token: TokenWithPrice
   chainId: number
+  /** Si true, la ligne est atténuée (token masqué affiché en mode "tout voir") */
+  dimmed?: boolean
 }
 
 function TokenIcon({ symbol, logo }: { symbol: string; logo?: string }) {
@@ -33,7 +35,7 @@ function TokenIcon({ symbol, logo }: { symbol: string; logo?: string }) {
   )
 }
 
-export function TokenRow({ token, chainId }: Props) {
+export function TokenRow({ token, chainId, dimmed = false }: Props) {
   const { currency } = useFiat()
   const price = currency === 'eur' ? token.priceEur : token.priceUsd
   const value = currency === 'eur' ? token.valueEur : token.valueUsd
@@ -46,7 +48,7 @@ export function TokenRow({ token, chainId }: Props) {
   return (
     <Link
       href={tokenPath}
-      className="group relative flex items-center gap-4 overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.025] px-5 py-4 transition-all duration-200 hover:border-cyan-500/30 hover:bg-white/[0.05] hover:shadow-[0_0_24px_-6px_rgba(34,211,238,0.15)]"
+      className={`group relative flex items-center gap-4 overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.025] px-5 py-4 transition-all duration-200 hover:border-cyan-500/30 hover:bg-white/[0.05] hover:shadow-[0_0_24px_-6px_rgba(34,211,238,0.15)] ${dimmed ? 'opacity-40' : ''}`}
     >
       {/* Accent bar gauche au hover */}
       <span className="absolute inset-y-0 left-0 w-0.5 rounded-r bg-gradient-to-b from-cyan-400 to-indigo-500 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
