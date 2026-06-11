@@ -79,7 +79,7 @@ export default function TokenDetailPage({ params }: Props) {
       ) : detail ? (
         <>
           <TokenSummaryTable detail={detail} />
-          <ConversionsTable conversions={detail.conversions} symbol={detail.token.symbol} />
+          <ConversionsTable conversions={detail.conversions} symbol={detail.token.symbol} chainId={chainId} />
         </>
       ) : null}
     </div>
